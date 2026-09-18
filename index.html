@@ -280,6 +280,7 @@
               </div>
             </div>
             <p class="alerta-situacao" id="alertaSituacao" role="alert" hidden></p>
+            <p class="alerta-situacao" id="alertaEspecial" role="alert" hidden></p>
             <details class="receita" id="receitaBox" open>
               <summary>Dados da Receita Federal</summary>
               <p class="nota">Preenchidos automaticamente ao digitar o CNPJ. Você pode corrigir qualquer campo antes de salvar. Ao consultar de novo, estes campos são substituídos pelos dados da Receita.</p>
@@ -473,7 +474,10 @@
       ['situacao_cadastral', 'Código da situação', 'int', 3],
       ['descricao_situacao_cadastral', 'Descrição da situação', 'text', 5],
       ['data_situacao_cadastral', 'Data da situação', 'date', 4],
-      ['motivo_situacao_cadastral', 'Motivo da situação', 'text', 12]
+      ['motivo_situacao_cadastral', 'Motivo da situação', 'text', 12],
+      ['situacao_especial', 'Situação especial', 'text', 5],
+      ['data_situacao_especial', 'Data da situação especial', 'date', 3],
+      ['sinal_especial_no_nome', 'Sinal no nome da empresa', 'sinal', 4]
     ]],
     ['Atividade e tributação', [
       ['cnae_principal', 'CNAE principal', 'cnae', 3],
@@ -558,11 +562,13 @@
         rotulo.htmlFor = 'f_' + chave;
         rotulo.textContent = c[1];
         var el;
-        if (tipo === 'bool' || tipo === 'matriz'){
+        if (tipo === 'bool' || tipo === 'matriz' || tipo === 'sinal'){
           el = document.createElement('select');
           var ops = tipo === 'bool'
             ? [['', 'Não informado'], ['true', 'Sim'], ['false', 'Não']]
-            : [['', 'Não informado'], ['MATRIZ', 'Matriz'], ['FILIAL', 'Filial']];
+            : (tipo === 'sinal'
+              ? [['', 'Nenhum'], ['FALENCIA', 'Falência'], ['RECUPERACAO JUDICIAL', 'Recuperação judicial'], ['RECUPERACAO EXTRAJUDICIAL', 'Recuperação extrajudicial'], ['LIQUIDACAO', 'Liquidação']]
+              : [['', 'Não informado'], ['MATRIZ', 'Matriz'], ['FILIAL', 'Filial']]);
           ops.forEach(function(o){
             var op = document.createElement('option');
             op.value = o[0];
@@ -602,7 +608,7 @@
     var el = $('f_' + chave), t = TIPOS[chave];
     if (v === null || v === undefined) v = '';
     if (t === 'bool') el.value = v === true ? 'true' : (v === false ? 'false' : '');
-    else if (t === 'matriz'){
+    else if (t === 'matriz' || t === 'sinal'){
       if (v && !el.querySelector('option[value="' + v + '"]')){
         var op = document.createElement('option');
         op.value = v;
@@ -698,6 +704,9 @@
       descricao_situacao_cadastral: t(d.descricao_situacao_cadastral),
       data_situacao_cadastral: t(d.data_situacao_cadastral),
       motivo_situacao_cadastral: motivo,
+      situacao_especial: t(d.situacao_especial),
+      data_situacao_especial: t(d.data_situacao_especial),
+      sinal_especial_no_nome: detectarSinalNome([d.razao_social, d.nome_fantasia]),
       data_inicio_atividade: t(d.data_inicio_atividade),
       matriz_filial: t(d.descricao_identificador_matriz_filial),
       natureza_juridica: t(d.natureza_juridica),
@@ -721,6 +730,54 @@
     };
   }
 
+  // Sinais de falência, recuperação ou liquidação que a Receita acrescenta ao nome da empresa
+  var SINAIS_NOME = [
+    ['FALENCIA', /\b(MASSA FALIDA|FALIDA|FALIDO|FALENCIA)\b/],
+    ['RECUPERACAO JUDICIAL', /\bRECUPERACAO JUDICIAL\b/],
+    ['RECUPERACAO EXTRAJUDICIAL', /\bRECUPERACAO EXTRAJUDICIAL\b/],
+    ['LIQUIDACAO', /\bEM LIQUIDACAO\b/]
+  ];
+  var ROTULO_SINAL = {
+    'FALENCIA': 'falência',
+    'RECUPERACAO JUDICIAL': 'recuperação judicial',
+    'RECUPERACAO EXTRAJUDICIAL': 'recuperação extrajudicial',
+    'LIQUIDACAO': 'liquidação'
+  };
+
+  function sinalNoTexto(texto){
+    var t = String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    for (var i = 0; i < SINAIS_NOME.length; i++){
+      if (SINAIS_NOME[i][1].test(t)) return SINAIS_NOME[i][0];
+    }
+    return null;
+  }
+
+  // Procura o sinal na razão social e, se não houver, no nome fantasia
+  function detectarSinalNome(nomes){
+    for (var i = 0; i < nomes.length; i++){
+      var sinal = sinalNoTexto(nomes[i]);
+      if (sinal) return sinal;
+    }
+    return null;
+  }
+
+  // Avisa, apenas em texto, sobre falência, recuperação ou liquidação
+  function mostrarAlertaEspecial(dados){
+    var el = $('alertaEspecial');
+    var txt = '';
+    if (dados && dados.situacao_especial){
+      txt = 'Atenção: a Receita registra situação especial ' + dados.situacao_especial;
+      var d = fmtData(dados.data_situacao_especial);
+      if (d) txt += ' desde ' + d;
+      txt += '.';
+    } else if (dados && dados.sinal_especial_no_nome){
+      var nome = sinalNoTexto(dados.razao_social) === dados.sinal_especial_no_nome ? dados.razao_social : dados.nome_fantasia;
+      txt = 'Atenção: o nome da empresa na Receita indica ' + ROTULO_SINAL[dados.sinal_especial_no_nome] + ' ("' + nome + '"). Confirme antes de prosseguir.';
+    }
+    el.textContent = txt;
+    el.hidden = !txt;
+  }
+
   function fmtData(iso){
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
     return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
@@ -728,6 +785,7 @@
 
   // Avisa, apenas em texto, quando a empresa consultada não está com situação ATIVA
   function mostrarAlertaSituacao(dados){
+    mostrarAlertaEspecial(dados);
     var el = $('alertaSituacao');
     var sit = dados && dados.descricao_situacao_cadastral;
     if (!sit || sit === 'ATIVA'){
@@ -762,6 +820,9 @@
         linha.situacao_cadastral = dados.situacao_cadastral;
         linha.descricao_situacao_cadastral = dados.descricao_situacao_cadastral;
         linha.motivo_situacao_cadastral = dados.motivo_situacao_cadastral;
+        linha.situacao_especial = dados.situacao_especial;
+        linha.data_situacao_especial = dados.data_situacao_especial;
+        linha.sinal_especial_no_nome = dados.sinal_especial_no_nome;
       }
       sb.from('consultas_cnpj').insert(linha).then(function(){}, function(){});
     } catch (e){}
