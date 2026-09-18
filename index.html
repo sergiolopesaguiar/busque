@@ -108,7 +108,7 @@
   main{padding:28px 32px 48px;max-width:1080px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;margin-bottom:24px}
   .card h2{font-size:20px;margin-bottom:16px}
-  .grid2{display:grid;grid-template-columns:220px 1fr;gap:16px}
+  .grid2{display:grid;grid-template-columns:220px 1fr 210px;gap:16px}
   .actions{display:flex;gap:12px;flex-wrap:wrap}
 
   .list-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px}
@@ -140,6 +140,7 @@
   .filtros{display:flex;gap:12px;flex-wrap:wrap;flex:1 1 420px;justify-content:flex-end}
   .filtros select{width:auto;min-width:210px}
   .filtros input{flex:1 1 240px}
+  .alerta-situacao{margin:0 0 16px;padding:10px 14px;border-radius:8px;background:var(--danger-bg);color:var(--danger);border:1px solid #F1B8B2;font-size:14px;font-weight:600}
   .welcome .big{color:var(--text);font-size:18px}
 
   .toast{position:fixed;right:24px;bottom:24px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:8px;font-weight:500;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .2s,transform .2s;max-width:340px;z-index:50}
@@ -272,7 +273,13 @@
                 <input id="nome" autocomplete="off" maxlength="200" placeholder="Razão social ou nome do cliente">
                 <p class="err" id="nomeErr" role="alert"></p>
               </div>
+              <div class="field">
+                <label for="celular">Celular</label>
+                <input id="celular" inputmode="tel" autocomplete="off" placeholder="(00) 00000-0000">
+                <p class="err" id="celularErr" role="alert"></p>
+              </div>
             </div>
+            <p class="alerta-situacao" id="alertaSituacao" role="alert" hidden></p>
             <details class="receita" id="receitaBox" open>
               <summary>Dados da Receita Federal</summary>
               <p class="nota">Preenchidos automaticamente ao digitar o CNPJ. Você pode corrigir qualquer campo antes de salvar. Ao consultar de novo, estes campos são substituídos pelos dados da Receita.</p>
@@ -465,7 +472,8 @@
     ['Situação cadastral', [
       ['situacao_cadastral', 'Código da situação', 'int', 3],
       ['descricao_situacao_cadastral', 'Descrição da situação', 'text', 5],
-      ['data_situacao_cadastral', 'Data da situação', 'date', 4]
+      ['data_situacao_cadastral', 'Data da situação', 'date', 4],
+      ['motivo_situacao_cadastral', 'Motivo da situação', 'text', 12]
     ]],
     ['Atividade e tributação', [
       ['cnae_principal', 'CNAE principal', 'cnae', 3],
@@ -647,6 +655,7 @@
     if (cnpjAbort){ cnpjAbort.abort(); cnpjAbort = null; }
     nomeAuto = '';
     setHint('');
+    mostrarAlertaSituacao(null);
   }
 
   function aplicarNome(nome){
@@ -680,12 +689,15 @@
     var cep = dig(d.cep);
     var uf = t(d.uf);
     var email = t(d.email);
+    var motivo = t(d.descricao_motivo_situacao_cadastral);
+    if (motivo && motivo.toUpperCase() === 'SEM MOTIVO') motivo = null;
     return {
       razao_social: t(d.razao_social),
       nome_fantasia: t(d.nome_fantasia),
       situacao_cadastral: num(d.situacao_cadastral),
       descricao_situacao_cadastral: t(d.descricao_situacao_cadastral),
       data_situacao_cadastral: t(d.data_situacao_cadastral),
+      motivo_situacao_cadastral: motivo,
       data_inicio_atividade: t(d.data_inicio_atividade),
       matriz_filial: t(d.descricao_identificador_matriz_filial),
       natureza_juridica: t(d.natureza_juridica),
@@ -709,18 +721,49 @@
     };
   }
 
+  function fmtData(iso){
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+    return m ? m[3] + '/' + m[2] + '/' + m[1] : '';
+  }
+
+  // Avisa, apenas em texto, quando a empresa consultada não está com situação ATIVA
+  function mostrarAlertaSituacao(dados){
+    var el = $('alertaSituacao');
+    var sit = dados && dados.descricao_situacao_cadastral;
+    if (!sit || sit === 'ATIVA'){
+      el.hidden = true;
+      el.textContent = '';
+      return;
+    }
+    var txt = 'Atenção: esta empresa está com a situação cadastral ' + sit;
+    var d = fmtData(dados.data_situacao_cadastral);
+    if (d) txt += ' desde ' + d;
+    txt += '.';
+    if (dados.motivo_situacao_cadastral) txt += ' Motivo: ' + dados.motivo_situacao_cadastral + '.';
+    el.textContent = txt;
+    el.hidden = false;
+  }
+
   function receberDados(reg){
     CHAVES.forEach(function(k){ if (k !== 'data_consulta') setCampo(k, reg.dados[k]); });
     dataConsultaAtual = reg.quando;
     setCampo('data_consulta', reg.quando);
+    mostrarAlertaSituacao(reg.dados);
     if (reg.nome) mostrarResultadoCnpj(reg.nome);
     else setHint('A Receita não retornou o nome desta empresa. Preencha manualmente.', 'aviso');
   }
 
   // Registra cada consulta feita à BrasilAPI (alimenta o contador do painel)
-  function registrarConsulta(cnpj, resultado){
+  function registrarConsulta(cnpj, resultado, dados){
     try {
-      sb.from('consultas_cnpj').insert({ cnpj: cnpj, resultado: resultado }).then(function(){}, function(){});
+      var linha = { cnpj: cnpj, resultado: resultado };
+      if (dados){
+        linha.razao_social = dados.razao_social;
+        linha.situacao_cadastral = dados.situacao_cadastral;
+        linha.descricao_situacao_cadastral = dados.descricao_situacao_cadastral;
+        linha.motivo_situacao_cadastral = dados.motivo_situacao_cadastral;
+      }
+      sb.from('consultas_cnpj').insert(linha).then(function(){}, function(){});
     } catch (e){}
   }
 
@@ -763,8 +806,8 @@
     setHint('Buscando dados da empresa...', '');
     try {
       var res = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + cnpj);
-      registrarConsulta(cnpj, res.ok ? 'sucesso' : ((res.status === 404 || res.status === 400) ? 'nao_encontrado' : (res.status === 429 ? 'limite' : 'erro')));
-      if (cnpjAbort !== ctrl) return;
+      if (!res.ok) registrarConsulta(cnpj, (res.status === 404 || res.status === 400) ? 'nao_encontrado' : (res.status === 429 ? 'limite' : 'erro'));
+      if (!res.ok && cnpjAbort !== ctrl) return;
       if (res.status === 404 || res.status === 400){
         setHint('CNPJ não encontrado na Receita Federal. Preencha os dados manualmente.', 'aviso');
         return;
@@ -774,9 +817,11 @@
         return;
       }
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      var d = await res.json();
-      if (cnpjAbort !== ctrl) return;
+      var d;
+      try { d = await res.json(); } catch (e2){ registrarConsulta(cnpj, 'erro'); throw e2; }
       var dados = mapearBrasilApi(d);
+      registrarConsulta(cnpj, 'sucesso', dados);
+      if (cnpjAbort !== ctrl) return;
       var reg = { dados: dados, nome: dados.razao_social || dados.nome_fantasia, quando: new Date().toISOString() };
       cnpjCache[cnpj] = reg;
       receberDados(reg);
@@ -792,6 +837,7 @@
     setErr('cnpj', '');
     if (cnpjAbort){ cnpjAbort.abort(); cnpjAbort = null; }
     setHint('');
+    mostrarAlertaSituacao(null);
     var d = onlyDigits(this.value);
     if (d.length === 14){
       if (cnpjValido(d)) consultarCnpj(d, false);
@@ -915,6 +961,10 @@
     setTimeout(function(){ $('listaClientes').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
   });
   $('nome').addEventListener('input', function(){ setErr('nome', ''); });
+  $('celular').addEventListener('input', function(){
+    this.value = fmtTel(this.value);
+    setErr('celular', '');
+  });
 
   function setErr(campo, msg){
     $(campo + 'Err').textContent = msg;
@@ -924,6 +974,7 @@
   function limparErros(){
     setErr('cnpj', '');
     setErr('nome', '');
+    setErr('celular', '');
     CHAVES.forEach(function(k){ setErrF(k, ''); });
   }
 
@@ -944,6 +995,7 @@
     limparErros();
     $('cnpj').value = maskCnpj(c.cnpj);
     $('nome').value = c.nome;
+    $('celular').value = fmtTel(c.celular);
     CHAVES.forEach(function(k){ if (k !== 'data_consulta') setCampo(k, c[k]); });
     dataConsultaAtual = c.data_consulta || null;
     setCampo('data_consulta', dataConsultaAtual);
@@ -967,7 +1019,11 @@
     else if (!cnpjValido(cnpj)){ setErr('cnpj', 'CNPJ inválido. Confira os 14 números.'); ok = false; }
     if (!nome){ setErr('nome', 'Informe o nome do cliente.'); ok = false; }
 
-    var dados = { cnpj: cnpj, nome: nome };
+    var dados = { cnpj: cnpj, nome: nome, celular: onlyDigits($('celular').value) || null };
+    if (dados.celular && !/^[1-9][1-9]9[0-9]{8}$/.test(dados.celular)){
+      setErr('celular', 'Informe o DDD e 9 dígitos, por exemplo (48) 99999-8888.');
+      ok = false;
+    }
     CHAVES.forEach(function(k){ dados[k] = getCampo(k); });
 
     function erroCampo(k, msg){
@@ -986,6 +1042,8 @@
       if (primeiroErro){
         $('receitaBox').open = true;
         $('f_' + primeiroErro).focus();
+      } else if ($('celular').classList.contains('invalid')){
+        $('celular').focus();
       }
       return;
     }
