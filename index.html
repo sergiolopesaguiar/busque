@@ -138,7 +138,7 @@
     </div>
     <div>
       <h1>Cadastre e encontre seus clientes em segundos.</h1>
-      <p>Acesse com o e-mail e a senha fornecidos pelo administrador do sistema.</p>
+      <p>Informe a senha de acesso para entrar.</p>
     </div>
   </div>
   <div class="login-main">
@@ -147,9 +147,9 @@
       <p class="sub">Informe seus dados de acesso.</p>
       <form id="loginForm" novalidate>
         <div id="loginError" class="form-error" role="alert" hidden></div>
-        <div class="field">
+        <div class="field" id="emailField">
           <label for="email">E-mail</label>
-          <input id="email" type="email" autocomplete="username" placeholder="voce@empresa.com.br" required>
+          <input id="email" type="email" autocomplete="username" placeholder="voce@empresa.com.br">
         </div>
         <div class="field">
           <label for="senha">Senha</label>
@@ -258,6 +258,13 @@
   var SUPABASE_KEY = 'sb_publishable_oFD1U6EwSzomR8RdB-Ws8g_XoAPawTd';
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+  // ---------- MODO DE TESTE: login apenas com senha ----------
+  // O Supabase exige um e-mail, então o sistema usa um usuário fixo de teste.
+  // Para voltar ao login com e-mail e senha, troque LOGIN_SO_SENHA para false.
+  var LOGIN_SO_SENHA = true;
+  var EMAIL_DE_TESTE = 'teste@example.com';
+  if (LOGIN_SO_SENHA) document.getElementById('emailField').hidden = true;
+
   // ---------- Utilidades ----------
   function $(id){ return document.getElementById(id); }
   function onlyDigits(s){ return (s || '').replace(/\D/g, ''); }
@@ -322,6 +329,7 @@
   function showLogin(){
     $('app').hidden = true;
     $('login').hidden = false;
+    if (LOGIN_SO_SENHA) $('senha').focus();
     clientes = [];
     resetForm();
   }
@@ -329,7 +337,7 @@
   function showApp(session){
     $('login').hidden = true;
     $('app').hidden = false;
-    $('userEmail').textContent = session.user.email || '';
+    $('userEmail').textContent = LOGIN_SO_SENHA ? 'Acesso de teste' : (session.user.email || '');
     route();
     loadClientes();
   }
@@ -347,10 +355,10 @@
     e.preventDefault();
     var box = $('loginError');
     box.hidden = true;
-    var email = $('email').value.trim();
+    var email = LOGIN_SO_SENHA ? EMAIL_DE_TESTE : $('email').value.trim();
     var senha = $('senha').value;
     if (!email || !senha){
-      box.textContent = 'Informe o e-mail e a senha.';
+      box.textContent = LOGIN_SO_SENHA ? 'Informe a senha.' : 'Informe o e-mail e a senha.';
       box.hidden = false;
       return;
     }
@@ -362,7 +370,7 @@
     btn.textContent = 'Entrar';
     if (res.error){
       var m = res.error.message || '';
-      if (/invalid login credentials/i.test(m)) box.textContent = 'E-mail ou senha incorretos.';
+      if (/invalid login credentials/i.test(m)) box.textContent = LOGIN_SO_SENHA ? 'Senha incorreta.' : 'E-mail ou senha incorretos.';
       else if (/email not confirmed/i.test(m)) box.textContent = 'Este acesso ainda não foi confirmado. Peça ao administrador para confirmar o usuário.';
       else box.textContent = 'Não foi possível entrar. ' + m;
       box.hidden = false;
