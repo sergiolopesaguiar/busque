@@ -133,6 +133,13 @@
   .stat-rotulo{font-weight:600;color:var(--muted);font-size:14px}
   .stat-valor{font-family:var(--font-display);font-size:44px;line-height:1.1;font-weight:700;color:var(--ink)}
   .stat-nota{font-size:13px;color:var(--muted)}
+  .stat-link{text-decoration:none;color:inherit}
+  .stat-link:hover{border-color:#B9C4CD;border-left-color:var(--accent)}
+  .stat.alerta{border-left-color:var(--danger)}
+  .stat.alerta .stat-valor{color:var(--danger)}
+  .filtros{display:flex;gap:12px;flex-wrap:wrap;flex:1 1 420px;justify-content:flex-end}
+  .filtros select{width:auto;min-width:210px}
+  .filtros input{flex:1 1 240px}
   .welcome .big{color:var(--text);font-size:18px}
 
   .toast{position:fixed;right:24px;bottom:24px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:8px;font-weight:500;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .2s,transform .2s;max-width:340px;z-index:50}
@@ -235,6 +242,11 @@
             <strong class="stat-valor" id="statConsultas">-</strong>
             <span class="stat-nota" id="statConsultasNota">Nos últimos 30 dias</span>
           </div>
+          <a class="stat stat-link" href="#clientes" id="cardIrregular">
+            <span class="stat-rotulo">Situação diferente de ATIVA</span>
+            <strong class="stat-valor" id="statIrregular">-</strong>
+            <span class="stat-nota" id="statIrregularNota">Baixada, inapta, suspensa ou nula</span>
+          </a>
         </div>
         <div class="card welcome">
           <h2>Bem-vindo ao Busque Seguros</h2>
@@ -274,10 +286,18 @@
           </form>
         </div>
 
-        <div class="card">
+        <div class="card" id="listaClientes">
           <div class="list-head">
             <h2>Clientes cadastrados <span class="count" id="listCount"></span></h2>
-            <input type="search" id="search" placeholder="Buscar por nome, CNPJ ou município" aria-label="Buscar cliente">
+            <div class="filtros">
+              <select id="filtroSituacao" aria-label="Filtrar por situação cadastral">
+                <option value="todas">Todas as situações</option>
+                <option value="ativa">Somente ATIVA</option>
+                <option value="irregular">Diferente de ATIVA</option>
+                <option value="sem">Sem situação informada</option>
+              </select>
+              <input type="search" id="search" placeholder="Buscar por nome, CNPJ ou município" aria-label="Buscar cliente">
+            </div>
           </div>
           <div class="table-wrap" id="tableWrap">
             <table>
@@ -357,6 +377,7 @@
     $('page-painel').hidden = r !== 'painel';
     $('page-clientes').hidden = r !== 'clientes';
     $('pageTitle').textContent = TITULOS[r];
+    if (r !== 'clientes' && $('filtroSituacao').value !== 'todas'){ $('filtroSituacao').value = 'todas'; renderList(); }
     if (r === 'painel' && currentUserId) carregarResumo();
     document.querySelectorAll('.nav-item').forEach(function(a){
       if (a.getAttribute('data-route') === r) a.setAttribute('aria-current', 'page');
@@ -711,7 +732,9 @@
     var r = await Promise.all([
       contar('clientes'),
       contar('consultas_cnpj').gte('created_at', desde),
-      contar('consultas_cnpj').gte('created_at', desde).eq('resultado', 'sucesso')
+      contar('consultas_cnpj').gte('created_at', desde).eq('resultado', 'sucesso'),
+      contar('clientes').not('descricao_situacao_cadastral', 'is', null).neq('descricao_situacao_cadastral', 'ATIVA'),
+      contar('clientes').is('descricao_situacao_cadastral', null)
     ]);
     $('statClientes').textContent = r[0].error ? '-' : fmt(r[0].count);
     if (r[1].error || r[2].error){
@@ -720,6 +743,16 @@
     } else {
       $('statConsultas').textContent = fmt(r[1].count);
       $('statConsultasNota').textContent = 'Nos últimos 30 dias (' + fmt(r[2].count) + ' com dados encontrados)';
+    }
+    var card = $('cardIrregular');
+    if (r[3].error || r[4].error){
+      $('statIrregular').textContent = '-';
+      $('statIrregularNota').textContent = 'Não foi possível carregar';
+      card.classList.remove('alerta');
+    } else {
+      $('statIrregular').textContent = fmt(r[3].count);
+      $('statIrregularNota').textContent = 'Baixada, inapta, suspensa ou nula' + (r[4].count > 0 ? '. ' + fmt(r[4].count) + ' sem situação informada' : '');
+      card.classList.toggle('alerta', r[3].count > 0);
     }
   }
 
@@ -794,7 +827,12 @@
   function renderList(){
     var termo = norm($('search').value.trim());
     var termoNum = onlyDigits($('search').value);
+    var fs = $('filtroSituacao').value;
     var lista = clientes.filter(function(c){
+      var sit = c.descricao_situacao_cadastral;
+      if (fs === 'ativa' && sit !== 'ATIVA') return false;
+      if (fs === 'irregular' && !(sit && sit !== 'ATIVA')) return false;
+      if (fs === 'sem' && sit) return false;
       if (!termo) return true;
       var texto = norm([c.nome, c.razao_social, c.nome_fantasia, c.municipio].join(' '));
       if (texto.indexOf(termo) !== -1) return true;
@@ -812,7 +850,7 @@
       vazio.hidden = false;
       vazio.textContent = clientes.length === 0
         ? 'Nenhum cliente cadastrado ainda. Preencha o formulário acima para cadastrar o primeiro.'
-        : 'Nenhum cliente encontrado para essa busca.';
+        : 'Nenhum cliente encontrado para esse filtro ou busca.';
       return;
     }
     $('tableWrap').hidden = false;
@@ -868,6 +906,14 @@
   }
 
   $('search').addEventListener('input', renderList);
+  $('filtroSituacao').addEventListener('change', renderList);
+  // O cartão do painel abre o cadastro já filtrado pelos clientes com situação diferente de ATIVA
+  $('cardIrregular').addEventListener('click', function(){
+    $('filtroSituacao').value = 'irregular';
+    $('search').value = '';
+    renderList();
+    setTimeout(function(){ $('listaClientes').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+  });
   $('nome').addEventListener('input', function(){ setErr('nome', ''); });
 
   function setErr(campo, msg){
