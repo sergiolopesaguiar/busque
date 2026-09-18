@@ -117,7 +117,7 @@
   .count{color:var(--muted);font-family:var(--font-body);font-weight:500;font-size:15px;margin-left:6px}
   .list-head input{max-width:360px}
   .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
-  table{width:100%;border-collapse:collapse;min-width:760px}
+  table{width:100%;border-collapse:collapse;min-width:700px}
   th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line)}
   th{background:#F6F8F9;font-size:13px;font-weight:600;color:var(--muted)}
   tbody tr:last-child td{border-bottom:none}
@@ -164,6 +164,37 @@
     .grid2{grid-template-columns:1fr}
     .grid12 .field{grid-column:span 12}
     .card{padding:18px}
+  }
+  /* Celular e telas de toque: alvos de 44 px e letra de 16 px evitam o zoom automático do iOS */
+  @media (pointer:coarse), (max-width:900px){
+    input, select{font-size:16px}
+    #menuBtn{width:44px;height:44px}
+    .user button{height:44px}
+    .btn.small{height:44px}
+    .link-btn{min-height:44px;min-width:44px}
+    .receita > summary{padding:10px 0}
+  }
+  @media (max-width:900px){
+    .sidebar{height:100vh;height:100dvh;overflow-y:auto}
+    body.menu-aberto{overflow:hidden}
+  }
+  @media (max-width:800px){
+    .filtros{flex:1 1 100%;justify-content:stretch}
+    .filtros select,.filtros input,.list-head input{max-width:none;width:100%;flex:1 1 100%}
+  }
+  /* Celular e tablet: a lista de clientes vira cartões, sem rolagem lateral */
+  @media (max-width:1140px){
+    .table-wrap{border:none;overflow:visible;border-radius:0}
+    table{min-width:0;display:block}
+    thead{display:none}
+    tbody{display:block}
+    tr{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff}
+    td{display:block;border:none;padding:3px 0;text-align:left}
+    td::before{content:attr(data-label);display:block;font-size:12px;font-weight:600;color:var(--muted)}
+    td.nome-cel{order:-1;font-size:16px;font-weight:600;padding-bottom:8px}
+    td.nome-cel::before,td.row-actions::before{display:none}
+    td.cnpj{white-space:normal}
+    td.row-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
   }
   @media (prefers-reduced-motion:reduce){
     .sidebar,.toast{transition:none}
@@ -305,7 +336,7 @@
                 <option value="irregular">Diferente de ATIVA</option>
                 <option value="sem">Sem situação informada</option>
               </select>
-              <input type="search" id="search" placeholder="Buscar por nome, CNPJ ou município" aria-label="Buscar cliente">
+              <input type="search" id="search" placeholder="Nome, CNPJ ou município" aria-label="Buscar cliente">
             </div>
           </div>
           <div class="table-wrap" id="tableWrap">
@@ -396,8 +427,19 @@
   }
   window.addEventListener('hashchange', route);
 
-  function openMenu(){ $('sidebar').classList.add('open'); $('overlay').classList.add('show'); }
-  function closeMenu(){ $('sidebar').classList.remove('open'); $('overlay').classList.remove('show'); }
+  function openMenu(){
+    $('sidebar').classList.add('open');
+    $('overlay').classList.add('show');
+    document.body.classList.add('menu-aberto');
+    $('menuBtn').setAttribute('aria-expanded', 'true');
+  }
+  function closeMenu(){
+    $('sidebar').classList.remove('open');
+    $('overlay').classList.remove('show');
+    document.body.classList.remove('menu-aberto');
+    $('menuBtn').setAttribute('aria-expanded', 'false');
+  }
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeMenu(); });
   $('menuBtn').addEventListener('click', openMenu);
   $('overlay').addEventListener('click', closeMenu);
 
@@ -603,6 +645,8 @@
     });
   }
   montarCampos();
+  // No celular os dados da Receita começam recolhidos, para o formulário ficar curto; erros de validação reabrem a seção
+  if (window.matchMedia('(max-width: 900px)').matches) $('receitaBox').open = false;
 
   // Grava um valor do banco no campo da tela
   function setCampo(chave, v){
@@ -969,12 +1013,16 @@
 
       var tdCnpj = document.createElement('td');
       tdCnpj.className = 'cnpj';
+      tdCnpj.setAttribute('data-label', 'CNPJ');
       tdCnpj.textContent = maskCnpj(c.cnpj);
 
       var tdNome = document.createElement('td');
+      tdNome.className = 'nome-cel';
+      tdNome.setAttribute('data-label', 'Nome');
       tdNome.textContent = c.nome;
 
       var tdSit = document.createElement('td');
+      tdSit.setAttribute('data-label', 'Situação');
       if (c.descricao_situacao_cadastral){
         var badge = document.createElement('span');
         badge.className = 'badge ' + (c.descricao_situacao_cadastral === 'ATIVA' ? 'ok' : 'alerta');
@@ -985,6 +1033,7 @@
       }
 
       var tdLocal = document.createElement('td');
+      tdLocal.setAttribute('data-label', 'Município');
       tdLocal.textContent = [c.municipio, c.uf].filter(Boolean).join('/') || '-';
 
       var tdAc = document.createElement('td');
