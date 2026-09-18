@@ -40,6 +40,11 @@
   input:focus{outline:none;border-color:var(--ink-3);box-shadow:0 0 0 3px rgba(38,73,106,.22)}
   input.invalid{border-color:var(--danger)}
   .err{margin:0;color:var(--danger);font-size:13px;min-height:0}
+  .hint{margin:0;font-size:13px;color:var(--muted)}
+  .hint:empty{display:none}
+  .hint.ok{color:var(--ok)}
+  .hint.aviso{color:#8A5A00}
+  .hint .link-btn{padding:2px 6px;font-size:13px}
   .btn{height:44px;padding:0 20px;border-radius:8px;border:1px solid transparent;font-weight:600}
   .btn.primary{background:var(--ink);color:#fff}
   .btn.primary:hover{background:var(--ink-2)}
@@ -210,6 +215,7 @@
                 <label for="cnpj">CNPJ</label>
                 <input id="cnpj" inputmode="numeric" autocomplete="off" placeholder="00.000.000/0000-00" maxlength="18">
                 <p class="err" id="cnpjErr" role="alert"></p>
+                <p class="hint" id="cnpjHint" aria-live="polite"></p>
               </div>
               <div class="field">
                 <label for="nome">Nome</label>
@@ -459,9 +465,96 @@
 
   $('search').addEventListener('input', renderList);
 
+  // ---------- Consulta de CNPJ (BrasilAPI, dados da Receita Federal) ----------
+  var cnpjCache = {};
+  var cnpjAbort = null;
+  var nomeAuto = '';
+
+  function setHint(msg, tipo, acao){
+    var el = $('cnpjHint');
+    el.textContent = msg || '';
+    el.className = 'hint' + (tipo ? ' ' + tipo : '');
+    if (msg && acao){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'link-btn';
+      b.textContent = acao.texto;
+      b.addEventListener('click', acao.fn);
+      el.appendChild(document.createTextNode(' '));
+      el.appendChild(b);
+    }
+  }
+
+  function limparConsultaCnpj(){
+    if (cnpjAbort){ cnpjAbort.abort(); cnpjAbort = null; }
+    nomeAuto = '';
+    setHint('');
+  }
+
+  function aplicarNome(nome){
+    $('nome').value = nome;
+    nomeAuto = nome;
+    setErr('nome', '');
+  }
+
+  function mostrarResultadoCnpj(nome){
+    var atual = $('nome').value.trim();
+    if (!atual || atual === nomeAuto){
+      aplicarNome(nome);
+      setHint('Empresa encontrada na Receita Federal.', 'ok');
+    } else if (atual === nome){
+      setHint('Empresa encontrada na Receita Federal.', 'ok');
+    } else {
+      setHint('Nome na Receita Federal: ' + nome + '.', 'ok', {
+        texto: 'Usar este nome',
+        fn: function(){ aplicarNome(nome); setHint('Nome atualizado.', 'ok'); }
+      });
+    }
+  }
+
+  async function consultarCnpj(cnpj){
+    if (cnpjCache[cnpj]){ mostrarResultadoCnpj(cnpjCache[cnpj]); return; }
+    var ctrl = new AbortController();
+    cnpjAbort = ctrl;
+    setHint('Buscando dados da empresa...', '');
+    try {
+      var res = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + cnpj, { signal: ctrl.signal });
+      if (cnpjAbort !== ctrl) return;
+      if (res.status === 404 || res.status === 400){
+        setHint('CNPJ não encontrado na Receita Federal. Preencha o nome manualmente.', 'aviso');
+        return;
+      }
+      if (res.status === 429){
+        setHint('Muitas consultas seguidas. Aguarde um minuto ou preencha o nome manualmente.', 'aviso');
+        return;
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var d = await res.json();
+      if (cnpjAbort !== ctrl) return;
+      var nome = String(d.razao_social || d.nome_fantasia || '').trim();
+      if (!nome){
+        setHint('A Receita não retornou o nome desta empresa. Preencha manualmente.', 'aviso');
+        return;
+      }
+      cnpjCache[cnpj] = nome;
+      mostrarResultadoCnpj(nome);
+    } catch (e){
+      if (e && e.name === 'AbortError') return;
+      if (cnpjAbort !== ctrl) return;
+      setHint('Não foi possível consultar o CNPJ agora. Preencha o nome manualmente.', 'aviso');
+    }
+  }
+
   $('cnpj').addEventListener('input', function(){
     this.value = maskCnpj(this.value);
     setErr('cnpj', '');
+    if (cnpjAbort){ cnpjAbort.abort(); cnpjAbort = null; }
+    setHint('');
+    var d = onlyDigits(this.value);
+    if (d.length === 14){
+      if (cnpjValido(d)) consultarCnpj(d);
+      else setErr('cnpj', 'CNPJ inválido. Confira os 14 números.');
+    }
   });
   $('nome').addEventListener('input', function(){ setErr('nome', ''); });
 
@@ -473,6 +566,7 @@
   function resetForm(){
     editingId = null;
     $('clienteForm').reset();
+    limparConsultaCnpj();
     setErr('cnpj', '');
     setErr('nome', '');
     $('formTitle').textContent = 'Novo cliente';
@@ -482,6 +576,7 @@
 
   function startEdit(c){
     editingId = c.id;
+    limparConsultaCnpj();
     $('cnpj').value = maskCnpj(c.cnpj);
     $('nome').value = c.nome;
     setErr('cnpj', '');
