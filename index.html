@@ -50,13 +50,16 @@
 
   /* Login */
   #login{min-height:100vh;display:grid;grid-template-columns:1.1fr 1fr}
-  .login-side{background:var(--ink);padding:40px 56px;display:flex;flex-direction:column;justify-content:space-between}
+  .login-side{background:var(--ink);padding:40px 56px;display:flex;flex-direction:column;justify-content:flex-end}
   .login-side h1{color:#fff;font-size:clamp(30px,3.6vw,46px);line-height:1.1;max-width:14ch;font-weight:700}
   .login-side p{color:#A9BAC8;max-width:38ch;margin:16px 0 0}
-  .login-main{display:flex;align-items:center;justify-content:center;padding:32px}
+  .login-main{display:flex;align-items:center;justify-content:center;padding:32px;background:#fff}
   .login-box{width:100%;max-width:360px}
   .login-box h2{font-size:28px;margin-bottom:6px}
   .login-box .sub{color:var(--muted);margin:0 0 24px}
+  .logo-login{display:block;width:150px;height:auto;margin:0 0 32px}
+  .logo-tile{background:#fff;border-radius:10px;padding:10px 12px;margin:0 0 28px;display:flex;justify-content:center}
+  .logo-tile img{display:block;width:128px;height:auto}
   .form-error{background:var(--danger-bg);color:var(--danger);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:16px}
 
   /* App */
@@ -132,10 +135,6 @@
 <!-- LOGIN -->
 <div id="login" hidden>
   <div class="login-side">
-    <div class="brand">
-      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="none" stroke="#E3A30A" stroke-width="3"/><path d="M18 18l7 7" stroke="#E3A30A" stroke-width="3" stroke-linecap="round"/></svg>
-      <div><b>Busque</b> <span>Seguros</span></div>
-    </div>
     <div>
       <h1>Seguros para tudo que você precisa</h1>
       <p>Informe a senha de acesso para entrar.</p>
@@ -143,6 +142,7 @@
   </div>
   <div class="login-main">
     <div class="login-box">
+      <img class="logo-login" src="logo.png" alt="Busque Seguros" width="128" height="49">
       <h2>Entrar</h2>
       <p class="sub">Informe seus dados de acesso.</p>
       <form id="loginForm" novalidate>
@@ -165,10 +165,7 @@
 <div id="app" hidden>
   <div class="overlay" id="overlay"></div>
   <aside class="sidebar" id="sidebar">
-    <div class="brand">
-      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="none" stroke="#E3A30A" stroke-width="3"/><path d="M18 18l7 7" stroke="#E3A30A" stroke-width="3" stroke-linecap="round"/></svg>
-      <div><b>Busque</b> <span>Seguros</span></div>
-    </div>
+    <div class="logo-tile"><img src="logo.png" alt="Busque Seguros" width="128" height="49"></div>
     <nav aria-label="Menu principal">
       <a class="nav-item" href="#painel" data-route="painel">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2.5" y="2.5" width="6" height="6" rx="1.2"/><rect x="11.5" y="2.5" width="6" height="6" rx="1.2"/><rect x="2.5" y="11.5" width="6" height="6" rx="1.2"/><rect x="11.5" y="11.5" width="6" height="6" rx="1.2"/></svg>
