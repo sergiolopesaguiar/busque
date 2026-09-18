@@ -128,6 +128,11 @@
   .link-btn.danger:hover{background:var(--danger-bg)}
   .empty{color:var(--muted);text-align:center;padding:28px 12px;margin:0}
   .welcome p{margin:0 0 16px;color:var(--muted)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:24px}
+  .stat{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:var(--radius);padding:18px 20px;display:flex;flex-direction:column;gap:4px}
+  .stat-rotulo{font-weight:600;color:var(--muted);font-size:14px}
+  .stat-valor{font-family:var(--font-display);font-size:44px;line-height:1.1;font-weight:700;color:var(--ink)}
+  .stat-nota{font-size:13px;color:var(--muted)}
   .welcome .big{color:var(--text);font-size:18px}
 
   .toast{position:fixed;right:24px;bottom:24px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:8px;font-weight:500;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .2s,transform .2s;max-width:340px;z-index:50}
@@ -219,9 +224,21 @@
     <main>
       <!-- Painel -->
       <section id="page-painel">
+        <div class="stats" aria-label="Resumo">
+          <div class="stat">
+            <span class="stat-rotulo">Clientes cadastrados</span>
+            <strong class="stat-valor" id="statClientes">-</strong>
+            <span class="stat-nota">Total na base</span>
+          </div>
+          <div class="stat">
+            <span class="stat-rotulo">Consultas de CNPJ</span>
+            <strong class="stat-valor" id="statConsultas">-</strong>
+            <span class="stat-nota" id="statConsultasNota">Nos últimos 30 dias</span>
+          </div>
+        </div>
         <div class="card welcome">
           <h2>Bem-vindo ao Busque Seguros</h2>
-          <p class="big" id="painelResumo">Carregando clientes...</p>
+          <p class="big">Cadastre um cliente e os dados da Receita Federal são preenchidos automaticamente.</p>
           <a class="btn primary" href="#clientes" style="display:inline-flex;align-items:center;text-decoration:none">Cadastrar cliente</a>
         </div>
       </section>
@@ -340,6 +357,7 @@
     $('page-painel').hidden = r !== 'painel';
     $('page-clientes').hidden = r !== 'clientes';
     $('pageTitle').textContent = TITULOS[r];
+    if (r === 'painel' && currentUserId) carregarResumo();
     document.querySelectorAll('.nav-item').forEach(function(a){
       if (a.getAttribute('data-route') === r) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
@@ -678,13 +696,41 @@
     else setHint('A Receita não retornou o nome desta empresa. Preencha manualmente.', 'aviso');
   }
 
+  // Registra cada consulta feita à BrasilAPI (alimenta o contador do painel)
+  function registrarConsulta(cnpj, resultado){
+    try {
+      sb.from('consultas_cnpj').insert({ cnpj: cnpj, resultado: resultado }).then(function(){}, function(){});
+    } catch (e){}
+  }
+
+  // Contadores do painel: clientes cadastrados e consultas de CNPJ nos últimos 30 dias
+  async function carregarResumo(){
+    var desde = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    var contar = function(tabela){ return sb.from(tabela).select('id', { count: 'exact', head: true }); };
+    var fmt = function(n){ return Number(n).toLocaleString('pt-BR'); };
+    var r = await Promise.all([
+      contar('clientes'),
+      contar('consultas_cnpj').gte('created_at', desde),
+      contar('consultas_cnpj').gte('created_at', desde).eq('resultado', 'sucesso')
+    ]);
+    $('statClientes').textContent = r[0].error ? '-' : fmt(r[0].count);
+    if (r[1].error || r[2].error){
+      $('statConsultas').textContent = '-';
+      $('statConsultasNota').textContent = 'Não foi possível carregar';
+    } else {
+      $('statConsultas').textContent = fmt(r[1].count);
+      $('statConsultasNota').textContent = 'Nos últimos 30 dias (' + fmt(r[2].count) + ' com dados encontrados)';
+    }
+  }
+
   async function consultarCnpj(cnpj, forcar){
     if (!forcar && cnpjCache[cnpj]){ receberDados(cnpjCache[cnpj]); return; }
     var ctrl = new AbortController();
     cnpjAbort = ctrl;
     setHint('Buscando dados da empresa...', '');
     try {
-      var res = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + cnpj, { signal: ctrl.signal });
+      var res = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + cnpj);
+      registrarConsulta(cnpj, res.ok ? 'sucesso' : ((res.status === 404 || res.status === 400) ? 'nao_encontrado' : (res.status === 429 ? 'limite' : 'erro')));
       if (cnpjAbort !== ctrl) return;
       if (res.status === 404 || res.status === 400){
         setHint('CNPJ não encontrado na Receita Federal. Preencha os dados manualmente.', 'aviso');
@@ -739,15 +785,10 @@
     var res = await sb.from('clientes').select('*').order('nome', { ascending: true });
     if (res.error){
       toast('Não foi possível carregar os clientes. ' + res.error.message, 'erro');
-      $('painelResumo').textContent = 'Não foi possível carregar os clientes.';
       return;
     }
     clientes = res.data || [];
     renderList();
-    var n = clientes.length;
-    $('painelResumo').textContent = n === 0
-      ? 'Nenhum cliente cadastrado ainda.'
-      : (n === 1 ? 'Você tem 1 cliente cadastrado.' : 'Você tem ' + n + ' clientes cadastrados.');
   }
 
   function renderList(){
