@@ -39,12 +39,32 @@
   input::placeholder{color:#8797A4}
   input:focus{outline:none;border-color:var(--ink-3);box-shadow:0 0 0 3px rgba(38,73,106,.22)}
   input.invalid{border-color:var(--danger)}
+  select{height:44px;padding:0 10px;border:1px solid #B9C4CD;border-radius:8px;background:#fff;color:var(--text);font-family:inherit;font-size:15px;width:100%}
+  select:focus{outline:none;border-color:var(--ink-3);box-shadow:0 0 0 3px rgba(38,73,106,.22)}
+  select.invalid{border-color:var(--danger)}
+  input[readonly]{background:#F3F5F6;color:var(--muted)}
   .err{margin:0;color:var(--danger);font-size:13px;min-height:0}
   .hint{margin:0;font-size:13px;color:var(--muted)}
   .hint:empty{display:none}
   .hint.ok{color:var(--ok)}
   .hint.aviso{color:#8A5A00}
   .hint .link-btn{padding:2px 6px;font-size:13px}
+  .receita{margin:8px 0 24px}
+  .receita > summary{cursor:pointer;font-family:var(--font-display);font-size:18px;font-weight:700;margin-bottom:12px}
+  .nota{color:var(--muted);margin:0 0 12px;font-size:14px}
+  .btn.small{height:36px;padding:0 14px;font-size:14px}
+  .sec{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+  .sec h3{font-family:var(--font-display);font-size:16px;margin:0 0 12px}
+  .grid12{display:grid;grid-template-columns:repeat(12,1fr);gap:0 16px}
+  .grid12 .field{grid-column:span 12}
+  .grid12 .c3{grid-column:span 3}
+  .grid12 .c4{grid-column:span 4}
+  .grid12 .c5{grid-column:span 5}
+  .grid12 .c6{grid-column:span 6}
+  .grid12 .c9{grid-column:span 9}
+  .badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600}
+  .badge.ok{background:var(--ok-bg);color:var(--ok)}
+  .badge.alerta{background:var(--danger-bg);color:var(--danger)}
   .btn{height:44px;padding:0 20px;border-radius:8px;border:1px solid transparent;font-weight:600}
   .btn.primary{background:var(--ink);color:#fff}
   .btn.primary:hover{background:var(--ink-2)}
@@ -94,9 +114,9 @@
   .list-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px}
   .list-head h2{margin:0}
   .count{color:var(--muted);font-family:var(--font-body);font-weight:500;font-size:15px;margin-left:6px}
-  .list-head input{max-width:300px}
+  .list-head input{max-width:360px}
   .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
-  table{width:100%;border-collapse:collapse;min-width:520px}
+  table{width:100%;border-collapse:collapse;min-width:760px}
   th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line)}
   th{background:#F6F8F9;font-size:13px;font-weight:600;color:var(--muted)}
   tbody tr:last-child td{border-bottom:none}
@@ -128,6 +148,7 @@
     .topbar h1{font-size:20px}
     main{padding:20px 16px 40px}
     .grid2{grid-template-columns:1fr}
+    .grid12 .field{grid-column:span 12}
     .card{padding:18px}
   }
   @media (prefers-reduced-motion:reduce){
@@ -223,6 +244,12 @@
                 <p class="err" id="nomeErr" role="alert"></p>
               </div>
             </div>
+            <details class="receita" id="receitaBox" open>
+              <summary>Dados da Receita Federal</summary>
+              <p class="nota">Preenchidos automaticamente ao digitar o CNPJ. Você pode corrigir qualquer campo antes de salvar. Ao consultar de novo, estes campos são substituídos pelos dados da Receita.</p>
+              <button type="button" class="btn ghost small" id="btnAtualizar">Atualizar pela Receita</button>
+              <div id="camposReceita"></div>
+            </details>
             <div class="actions">
               <button class="btn primary" id="saveBtn" type="submit">Salvar cliente</button>
               <button class="btn ghost" id="cancelBtn" type="button" hidden>Cancelar edição</button>
@@ -233,11 +260,11 @@
         <div class="card">
           <div class="list-head">
             <h2>Clientes cadastrados <span class="count" id="listCount"></span></h2>
-            <input type="search" id="search" placeholder="Buscar por nome ou CNPJ" aria-label="Buscar cliente">
+            <input type="search" id="search" placeholder="Buscar por nome, CNPJ ou município" aria-label="Buscar cliente">
           </div>
           <div class="table-wrap" id="tableWrap">
             <table>
-              <thead><tr><th>CNPJ</th><th>Nome</th><th style="text-align:right">Ações</th></tr></thead>
+              <thead><tr><th>CNPJ</th><th>Nome</th><th>Situação</th><th>Município</th><th style="text-align:right">Ações</th></tr></thead>
               <tbody id="tbody"></tbody>
             </table>
           </div>
@@ -384,86 +411,178 @@
 
   $('logoutBtn').addEventListener('click', function(){ sb.auth.signOut(); });
 
-  // ---------- Clientes ----------
-  var clientes = [];
-  var editingId = null;
+  // ---------- Campos da Receita Federal ----------
+  // Cada campo: [chave (coluna do banco), rótulo, tipo, colunas na grade de 12]
+  var SECOES = [
+    ['Empresa', [
+      ['razao_social', 'Razão social', 'text', 6],
+      ['nome_fantasia', 'Nome fantasia', 'text', 6],
+      ['matriz_filial', 'Matriz ou filial', 'matriz', 3],
+      ['porte', 'Porte', 'text', 3],
+      ['data_inicio_atividade', 'Início da atividade', 'date', 3],
+      ['capital_social', 'Capital social (R$)', 'number', 3],
+      ['natureza_juridica', 'Natureza jurídica', 'text', 12]
+    ]],
+    ['Situação cadastral', [
+      ['situacao_cadastral', 'Código da situação', 'int', 3],
+      ['descricao_situacao_cadastral', 'Descrição da situação', 'text', 5],
+      ['data_situacao_cadastral', 'Data da situação', 'date', 4]
+    ]],
+    ['Atividade e tributação', [
+      ['cnae_principal', 'CNAE principal', 'cnae', 3],
+      ['cnae_principal_descricao', 'Descrição do CNAE', 'text', 9],
+      ['simples_nacional', 'Simples Nacional', 'bool', 6],
+      ['mei', 'MEI', 'bool', 6]
+    ]],
+    ['Endereço', [
+      ['cep', 'CEP', 'cep', 3],
+      ['logradouro', 'Logradouro', 'text', 6],
+      ['numero', 'Número', 'text', 3],
+      ['complemento', 'Complemento', 'text', 6],
+      ['bairro', 'Bairro', 'text', 6],
+      ['municipio', 'Município', 'text', 5],
+      ['codigo_municipio_ibge', 'Código IBGE do município', 'digits', 4],
+      ['uf', 'UF', 'uf', 3]
+    ]],
+    ['Contato', [
+      ['email', 'E-mail', 'email', 6],
+      ['telefone_1', 'Telefone 1', 'tel', 3],
+      ['telefone_2', 'Telefone 2', 'tel', 3]
+    ]],
+    ['Consulta à Receita', [
+      ['data_consulta', 'Data da consulta', 'datetime', 4]
+    ]]
+  ];
+  var TIPOS = {};
+  var CHAVES = [];
+  SECOES.forEach(function(sec){
+    sec[1].forEach(function(c){ TIPOS[c[0]] = c[2]; CHAVES.push(c[0]); });
+  });
+  var dataConsultaAtual = null;
 
-  async function loadClientes(){
-    var res = await sb.from('clientes').select('id,cnpj,nome').order('nome', { ascending: true });
-    if (res.error){
-      toast('Não foi possível carregar os clientes. ' + res.error.message, 'erro');
-      $('painelResumo').textContent = 'Não foi possível carregar os clientes.';
-      return;
-    }
-    clientes = res.data || [];
-    renderList();
-    var n = clientes.length;
-    $('painelResumo').textContent = n === 0
-      ? 'Nenhum cliente cadastrado ainda.'
-      : (n === 1 ? 'Você tem 1 cliente cadastrado.' : 'Você tem ' + n + ' clientes cadastrados.');
+  function fmtCep(v){
+    var d = onlyDigits(v).slice(0, 8);
+    return d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d;
+  }
+  function fmtTel(v){
+    var d = onlyDigits(v).slice(0, 11);
+    if (d.length <= 2) return d;
+    if (d.length <= 6) return '(' + d.slice(0, 2) + ') ' + d.slice(2);
+    if (d.length <= 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
+    return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+  }
+  function fmtCnae(v){
+    var d = onlyDigits(v).slice(0, 7);
+    if (d.length <= 4) return d;
+    if (d.length <= 5) return d.slice(0, 4) + '-' + d.slice(4);
+    return d.slice(0, 4) + '-' + d.slice(4, 5) + '/' + d.slice(5);
   }
 
-  function renderList(){
-    var termo = norm($('search').value.trim());
-    var termoNum = onlyDigits($('search').value);
-    var lista = clientes.filter(function(c){
-      if (!termo) return true;
-      if (norm(c.nome).indexOf(termo) !== -1) return true;
-      return termoNum.length > 0 && c.cnpj.indexOf(termoNum) !== -1;
-    });
-
-    $('listCount').textContent = clientes.length ? '(' + clientes.length + ')' : '';
-
-    var tbody = $('tbody');
-    tbody.textContent = '';
-    var vazio = $('emptyMsg');
-
-    if (lista.length === 0){
-      $('tableWrap').hidden = true;
-      vazio.hidden = false;
-      vazio.textContent = clientes.length === 0
-        ? 'Nenhum cliente cadastrado ainda. Preencha o formulário acima para cadastrar o primeiro.'
-        : 'Nenhum cliente encontrado para essa busca.';
-      return;
-    }
-    $('tableWrap').hidden = false;
-    vazio.hidden = true;
-
-    lista.forEach(function(c){
-      var tr = document.createElement('tr');
-
-      var tdCnpj = document.createElement('td');
-      tdCnpj.className = 'cnpj';
-      tdCnpj.textContent = maskCnpj(c.cnpj);
-
-      var tdNome = document.createElement('td');
-      tdNome.textContent = c.nome;
-
-      var tdAc = document.createElement('td');
-      tdAc.className = 'row-actions';
-
-      var bEd = document.createElement('button');
-      bEd.type = 'button';
-      bEd.className = 'link-btn';
-      bEd.textContent = 'Editar';
-      bEd.addEventListener('click', function(){ startEdit(c); });
-
-      var bDel = document.createElement('button');
-      bDel.type = 'button';
-      bDel.className = 'link-btn danger';
-      bDel.textContent = 'Excluir';
-      bDel.addEventListener('click', function(){ removeCliente(c); });
-
-      tdAc.appendChild(bEd);
-      tdAc.appendChild(bDel);
-      tr.appendChild(tdCnpj);
-      tr.appendChild(tdNome);
-      tr.appendChild(tdAc);
-      tbody.appendChild(tr);
-    });
+  function setErrF(chave, msg){
+    $('e_' + chave).textContent = msg;
+    $('f_' + chave).classList.toggle('invalid', !!msg);
   }
 
-  $('search').addEventListener('input', renderList);
+  function mascarar(chave){
+    var el = $('f_' + chave), t = TIPOS[chave];
+    if (t === 'cep') el.value = fmtCep(el.value);
+    else if (t === 'tel') el.value = fmtTel(el.value);
+    else if (t === 'cnae') el.value = fmtCnae(el.value);
+    else if (t === 'uf') el.value = el.value.replace(/[^a-zA-Z]/g, '').toUpperCase();
+    else if (t === 'digits') el.value = onlyDigits(el.value);
+    setErrF(chave, '');
+  }
+
+  function montarCampos(){
+    var alvo = $('camposReceita');
+    SECOES.forEach(function(sec){
+      var bloco = document.createElement('div');
+      bloco.className = 'sec';
+      var h = document.createElement('h3');
+      h.textContent = sec[0];
+      bloco.appendChild(h);
+      var grade = document.createElement('div');
+      grade.className = 'grid12';
+      sec[1].forEach(function(c){
+        var chave = c[0], tipo = c[2];
+        var campo = document.createElement('div');
+        campo.className = 'field c' + c[3];
+        var rotulo = document.createElement('label');
+        rotulo.htmlFor = 'f_' + chave;
+        rotulo.textContent = c[1];
+        var el;
+        if (tipo === 'bool' || tipo === 'matriz'){
+          el = document.createElement('select');
+          var ops = tipo === 'bool'
+            ? [['', 'Não informado'], ['true', 'Sim'], ['false', 'Não']]
+            : [['', 'Não informado'], ['MATRIZ', 'Matriz'], ['FILIAL', 'Filial']];
+          ops.forEach(function(o){
+            var op = document.createElement('option');
+            op.value = o[0];
+            op.textContent = o[1];
+            el.appendChild(op);
+          });
+        } else {
+          el = document.createElement('input');
+          el.type = tipo === 'date' ? 'date' : (tipo === 'number' || tipo === 'int') ? 'number' : tipo === 'email' ? 'email' : 'text';
+          el.autocomplete = 'off';
+          if (tipo === 'number'){ el.step = '0.01'; el.min = '0'; }
+          if (tipo === 'int'){ el.step = '1'; }
+          if (tipo === 'datetime'){ el.readOnly = true; }
+          if (tipo === 'uf'){ el.maxLength = 2; }
+          if (tipo === 'digits'){ el.inputMode = 'numeric'; el.maxLength = 7; }
+          if (tipo === 'cep' || tipo === 'cnae'){ el.inputMode = 'numeric'; }
+          if (tipo === 'tel'){ el.inputMode = 'tel'; }
+        }
+        el.id = 'f_' + chave;
+        el.addEventListener('input', function(){ mascarar(chave); });
+        var erro = document.createElement('p');
+        erro.className = 'err';
+        erro.id = 'e_' + chave;
+        campo.appendChild(rotulo);
+        campo.appendChild(el);
+        campo.appendChild(erro);
+        grade.appendChild(campo);
+      });
+      bloco.appendChild(grade);
+      $('camposReceita').appendChild(bloco);
+    });
+  }
+  montarCampos();
+
+  // Grava um valor do banco no campo da tela
+  function setCampo(chave, v){
+    var el = $('f_' + chave), t = TIPOS[chave];
+    if (v === null || v === undefined) v = '';
+    if (t === 'bool') el.value = v === true ? 'true' : (v === false ? 'false' : '');
+    else if (t === 'matriz'){
+      if (v && !el.querySelector('option[value="' + v + '"]')){
+        var op = document.createElement('option');
+        op.value = v;
+        op.textContent = v;
+        el.appendChild(op);
+      }
+      el.value = v;
+    }
+    else if (t === 'cep') el.value = fmtCep(v);
+    else if (t === 'tel') el.value = fmtTel(v);
+    else if (t === 'cnae') el.value = fmtCnae(v);
+    else if (t === 'datetime') el.value = v ? new Date(v).toLocaleString('pt-BR') : '';
+    else el.value = String(v);
+  }
+
+  // Lê o campo da tela no formato do banco
+  function getCampo(chave){
+    var el = $('f_' + chave), t = TIPOS[chave], v = el.value.trim();
+    if (t === 'bool') return v === 'true' ? true : (v === 'false' ? false : null);
+    if (t === 'cep' || t === 'tel' || t === 'cnae' || t === 'digits'){ var d = onlyDigits(v); return d || null; }
+    if (t === 'uf') return v ? v.toUpperCase() : null;
+    if (t === 'email') return v ? v.toLowerCase() : null;
+    if (t === 'number') return v === '' ? null : Number(v);
+    if (t === 'int') return v === '' ? null : parseInt(v, 10);
+    if (t === 'datetime') return dataConsultaAtual;
+    return v || null;
+  }
 
   // ---------- Consulta de CNPJ (BrasilAPI, dados da Receita Federal) ----------
   var cnpjCache = {};
@@ -512,8 +631,55 @@
     }
   }
 
-  async function consultarCnpj(cnpj){
-    if (cnpjCache[cnpj]){ mostrarResultadoCnpj(cnpjCache[cnpj]); return; }
+  // Converte a resposta da BrasilAPI para as colunas da tabela clientes
+  function mapearBrasilApi(d){
+    function t(v){ v = (v === null || v === undefined) ? '' : String(v).trim(); return v || null; }
+    function dig(v){ var x = onlyDigits(v === null || v === undefined ? '' : String(v)); return x || null; }
+    function num(v){ return (v === null || v === undefined || v === '' || isNaN(Number(v))) ? null : Number(v); }
+    var cnae = dig(d.cnae_fiscal);
+    if (cnae) cnae = cnae.padStart(7, '0');   // a API perde o zero à esquerda (ex.: 600001 vira 0600001)
+    var cep = dig(d.cep);
+    var uf = t(d.uf);
+    var email = t(d.email);
+    return {
+      razao_social: t(d.razao_social),
+      nome_fantasia: t(d.nome_fantasia),
+      situacao_cadastral: num(d.situacao_cadastral),
+      descricao_situacao_cadastral: t(d.descricao_situacao_cadastral),
+      data_situacao_cadastral: t(d.data_situacao_cadastral),
+      data_inicio_atividade: t(d.data_inicio_atividade),
+      matriz_filial: t(d.descricao_identificador_matriz_filial),
+      natureza_juridica: t(d.natureza_juridica),
+      capital_social: num(d.capital_social),
+      porte: t(d.porte),
+      cnae_principal: cnae,
+      cnae_principal_descricao: t(d.cnae_fiscal_descricao),
+      simples_nacional: typeof d.opcao_pelo_simples === 'boolean' ? d.opcao_pelo_simples : null,
+      mei: typeof d.opcao_pelo_mei === 'boolean' ? d.opcao_pelo_mei : null,
+      cep: (cep && cep.length === 8) ? cep : null,
+      logradouro: t(d.logradouro),
+      numero: t(d.numero),
+      complemento: t(d.complemento),
+      bairro: t(d.bairro),
+      municipio: t(d.municipio),
+      codigo_municipio_ibge: dig(d.codigo_municipio_ibge),
+      uf: uf ? uf.toUpperCase() : null,
+      email: email ? email.toLowerCase() : null,
+      telefone_1: dig(d.ddd_telefone_1),
+      telefone_2: dig(d.ddd_telefone_2)
+    };
+  }
+
+  function receberDados(reg){
+    CHAVES.forEach(function(k){ if (k !== 'data_consulta') setCampo(k, reg.dados[k]); });
+    dataConsultaAtual = reg.quando;
+    setCampo('data_consulta', reg.quando);
+    if (reg.nome) mostrarResultadoCnpj(reg.nome);
+    else setHint('A Receita não retornou o nome desta empresa. Preencha manualmente.', 'aviso');
+  }
+
+  async function consultarCnpj(cnpj, forcar){
+    if (!forcar && cnpjCache[cnpj]){ receberDados(cnpjCache[cnpj]); return; }
     var ctrl = new AbortController();
     cnpjAbort = ctrl;
     setHint('Buscando dados da empresa...', '');
@@ -521,27 +687,24 @@
       var res = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + cnpj, { signal: ctrl.signal });
       if (cnpjAbort !== ctrl) return;
       if (res.status === 404 || res.status === 400){
-        setHint('CNPJ não encontrado na Receita Federal. Preencha o nome manualmente.', 'aviso');
+        setHint('CNPJ não encontrado na Receita Federal. Preencha os dados manualmente.', 'aviso');
         return;
       }
       if (res.status === 429){
-        setHint('Muitas consultas seguidas. Aguarde um minuto ou preencha o nome manualmente.', 'aviso');
+        setHint('Muitas consultas seguidas. Aguarde um minuto ou preencha os dados manualmente.', 'aviso');
         return;
       }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var d = await res.json();
       if (cnpjAbort !== ctrl) return;
-      var nome = String(d.razao_social || d.nome_fantasia || '').trim();
-      if (!nome){
-        setHint('A Receita não retornou o nome desta empresa. Preencha manualmente.', 'aviso');
-        return;
-      }
-      cnpjCache[cnpj] = nome;
-      mostrarResultadoCnpj(nome);
+      var dados = mapearBrasilApi(d);
+      var reg = { dados: dados, nome: dados.razao_social || dados.nome_fantasia, quando: new Date().toISOString() };
+      cnpjCache[cnpj] = reg;
+      receberDados(reg);
     } catch (e){
       if (e && e.name === 'AbortError') return;
       if (cnpjAbort !== ctrl) return;
-      setHint('Não foi possível consultar o CNPJ agora. Preencha o nome manualmente.', 'aviso');
+      setHint('Não foi possível consultar o CNPJ agora. Preencha os dados manualmente.', 'aviso');
     }
   }
 
@@ -552,10 +715,118 @@
     setHint('');
     var d = onlyDigits(this.value);
     if (d.length === 14){
-      if (cnpjValido(d)) consultarCnpj(d);
+      if (cnpjValido(d)) consultarCnpj(d, false);
       else setErr('cnpj', 'CNPJ inválido. Confira os 14 números.');
     }
   });
+
+  $('btnAtualizar').addEventListener('click', function(){
+    var d = onlyDigits($('cnpj').value);
+    if (!cnpjValido(d)){
+      setErr('cnpj', 'Informe um CNPJ válido para consultar.');
+      $('cnpj').focus();
+      return;
+    }
+    if (cnpjAbort){ cnpjAbort.abort(); cnpjAbort = null; }
+    consultarCnpj(d, true);
+  });
+
+  // ---------- Clientes ----------
+  var clientes = [];
+  var editingId = null;
+
+  async function loadClientes(){
+    var res = await sb.from('clientes').select('*').order('nome', { ascending: true });
+    if (res.error){
+      toast('Não foi possível carregar os clientes. ' + res.error.message, 'erro');
+      $('painelResumo').textContent = 'Não foi possível carregar os clientes.';
+      return;
+    }
+    clientes = res.data || [];
+    renderList();
+    var n = clientes.length;
+    $('painelResumo').textContent = n === 0
+      ? 'Nenhum cliente cadastrado ainda.'
+      : (n === 1 ? 'Você tem 1 cliente cadastrado.' : 'Você tem ' + n + ' clientes cadastrados.');
+  }
+
+  function renderList(){
+    var termo = norm($('search').value.trim());
+    var termoNum = onlyDigits($('search').value);
+    var lista = clientes.filter(function(c){
+      if (!termo) return true;
+      var texto = norm([c.nome, c.razao_social, c.nome_fantasia, c.municipio].join(' '));
+      if (texto.indexOf(termo) !== -1) return true;
+      return termoNum.length > 0 && c.cnpj.indexOf(termoNum) !== -1;
+    });
+
+    $('listCount').textContent = clientes.length ? '(' + clientes.length + ')' : '';
+
+    var tbody = $('tbody');
+    tbody.textContent = '';
+    var vazio = $('emptyMsg');
+
+    if (lista.length === 0){
+      $('tableWrap').hidden = true;
+      vazio.hidden = false;
+      vazio.textContent = clientes.length === 0
+        ? 'Nenhum cliente cadastrado ainda. Preencha o formulário acima para cadastrar o primeiro.'
+        : 'Nenhum cliente encontrado para essa busca.';
+      return;
+    }
+    $('tableWrap').hidden = false;
+    vazio.hidden = true;
+
+    lista.forEach(function(c){
+      var tr = document.createElement('tr');
+
+      var tdCnpj = document.createElement('td');
+      tdCnpj.className = 'cnpj';
+      tdCnpj.textContent = maskCnpj(c.cnpj);
+
+      var tdNome = document.createElement('td');
+      tdNome.textContent = c.nome;
+
+      var tdSit = document.createElement('td');
+      if (c.descricao_situacao_cadastral){
+        var badge = document.createElement('span');
+        badge.className = 'badge ' + (c.descricao_situacao_cadastral === 'ATIVA' ? 'ok' : 'alerta');
+        badge.textContent = c.descricao_situacao_cadastral;
+        tdSit.appendChild(badge);
+      } else {
+        tdSit.textContent = '-';
+      }
+
+      var tdLocal = document.createElement('td');
+      tdLocal.textContent = [c.municipio, c.uf].filter(Boolean).join('/') || '-';
+
+      var tdAc = document.createElement('td');
+      tdAc.className = 'row-actions';
+
+      var bEd = document.createElement('button');
+      bEd.type = 'button';
+      bEd.className = 'link-btn';
+      bEd.textContent = 'Editar';
+      bEd.addEventListener('click', function(){ startEdit(c); });
+
+      var bDel = document.createElement('button');
+      bDel.type = 'button';
+      bDel.className = 'link-btn danger';
+      bDel.textContent = 'Excluir';
+      bDel.addEventListener('click', function(){ removeCliente(c); });
+
+      tdAc.appendChild(bEd);
+      tdAc.appendChild(bDel);
+      tr.appendChild(tdCnpj);
+      tr.appendChild(tdNome);
+      tr.appendChild(tdSit);
+      tr.appendChild(tdLocal);
+      tr.appendChild(tdAc);
+      tbody.appendChild(tr);
+    });
+  }
+
+  $('search').addEventListener('input', renderList);
   $('nome').addEventListener('input', function(){ setErr('nome', ''); });
 
   function setErr(campo, msg){
@@ -563,12 +834,18 @@
     $(campo).classList.toggle('invalid', !!msg);
   }
 
+  function limparErros(){
+    setErr('cnpj', '');
+    setErr('nome', '');
+    CHAVES.forEach(function(k){ setErrF(k, ''); });
+  }
+
   function resetForm(){
     editingId = null;
     $('clienteForm').reset();
     limparConsultaCnpj();
-    setErr('cnpj', '');
-    setErr('nome', '');
+    dataConsultaAtual = null;
+    limparErros();
     $('formTitle').textContent = 'Novo cliente';
     $('saveBtn').textContent = 'Salvar cliente';
     $('cancelBtn').hidden = true;
@@ -577,10 +854,12 @@
   function startEdit(c){
     editingId = c.id;
     limparConsultaCnpj();
+    limparErros();
     $('cnpj').value = maskCnpj(c.cnpj);
     $('nome').value = c.nome;
-    setErr('cnpj', '');
-    setErr('nome', '');
+    CHAVES.forEach(function(k){ if (k !== 'data_consulta') setCampo(k, c[k]); });
+    dataConsultaAtual = c.data_consulta || null;
+    setCampo('data_consulta', dataConsultaAtual);
     $('formTitle').textContent = 'Editar cliente';
     $('saveBtn').textContent = 'Salvar alterações';
     $('cancelBtn').hidden = false;
@@ -595,11 +874,34 @@
     var cnpj = onlyDigits($('cnpj').value);
     var nome = $('nome').value.trim().replace(/\s+/g, ' ');
     var ok = true;
+    var primeiroErro = null;
 
     if (!cnpj){ setErr('cnpj', 'Informe o CNPJ.'); ok = false; }
     else if (!cnpjValido(cnpj)){ setErr('cnpj', 'CNPJ inválido. Confira os 14 números.'); ok = false; }
     if (!nome){ setErr('nome', 'Informe o nome do cliente.'); ok = false; }
-    if (!ok) return;
+
+    var dados = { cnpj: cnpj, nome: nome };
+    CHAVES.forEach(function(k){ dados[k] = getCampo(k); });
+
+    function erroCampo(k, msg){
+      setErrF(k, msg);
+      ok = false;
+      if (!primeiroErro) primeiroErro = k;
+    }
+    if (dados.cep && dados.cep.length !== 8) erroCampo('cep', 'O CEP deve ter 8 números.');
+    if (dados.cnae_principal && dados.cnae_principal.length !== 7) erroCampo('cnae_principal', 'O CNAE deve ter 7 números.');
+    if (dados.codigo_municipio_ibge && dados.codigo_municipio_ibge.length !== 7) erroCampo('codigo_municipio_ibge', 'O código IBGE deve ter 7 números.');
+    if (dados.uf && !/^[A-Z]{2}$/.test(dados.uf)) erroCampo('uf', 'A UF deve ter 2 letras.');
+    if (dados.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dados.email)) erroCampo('email', 'E-mail inválido.');
+    if (dados.capital_social !== null && !(dados.capital_social >= 0)) erroCampo('capital_social', 'Informe um valor válido.');
+
+    if (!ok){
+      if (primeiroErro){
+        $('receitaBox').open = true;
+        $('f_' + primeiroErro).focus();
+      }
+      return;
+    }
 
     var btn = $('saveBtn');
     var textoOriginal = btn.textContent;
@@ -608,9 +910,9 @@
 
     var res;
     if (editingId){
-      res = await sb.from('clientes').update({ cnpj: cnpj, nome: nome }).eq('id', editingId);
+      res = await sb.from('clientes').update(dados).eq('id', editingId);
     } else {
-      res = await sb.from('clientes').insert({ cnpj: cnpj, nome: nome });
+      res = await sb.from('clientes').insert(dados);
     }
 
     btn.disabled = false;
