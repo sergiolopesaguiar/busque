@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Busque Seguros</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --ink:#10263B; --ink-2:#193752; --ink-3:#26496A;
+    --paper:#F3F5F6; --card:#FFFFFF; --line:#DCE2E7;
+    --text:#16222D; --muted:#5A6A78;
+    --accent:#E3A30A;
+    --danger:#B42318; --danger-bg:#FDECEA; --ok:#1B7F4B; --ok-bg:#E8F5EE;
+    --radius:10px;
+    --font-display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+    --font-body:'Public Sans','Segoe UI',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0;height:100%}
+  body{font-family:var(--font-body);color:var(--text);background:var(--paper);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  h1,h2{font-family:var(--font-display);margin:0;letter-spacing:-0.01em}
+  button{font-family:inherit;font-size:inherit;cursor:pointer}
+  :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+  /* Marca */
+  .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-size:20px;color:#fff}
+  .brand b{font-weight:700}
+  .brand span{font-weight:500;color:#C5D2DD}
+
+  /* Campos e botões */
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+  label{font-weight:600;font-size:14px}
+  input{height:44px;padding:0 12px;border:1px solid #B9C4CD;border-radius:8px;background:#fff;color:var(--text);font-family:inherit;font-size:15px;width:100%}
+  input::placeholder{color:#8797A4}
+  input:focus{outline:none;border-color:var(--ink-3);box-shadow:0 0 0 3px rgba(38,73,106,.22)}
+  input.invalid{border-color:var(--danger)}
+  .err{margin:0;color:var(--danger);font-size:13px;min-height:0}
+  .btn{height:44px;padding:0 20px;border-radius:8px;border:1px solid transparent;font-weight:600}
+  .btn.primary{background:var(--ink);color:#fff}
+  .btn.primary:hover{background:var(--ink-2)}
+  .btn.primary:disabled{opacity:.6;cursor:progress}
+  .btn.ghost{background:transparent;border-color:#B9C4CD;color:var(--text)}
+  .btn.ghost:hover{background:#EEF2F4}
+  .btn.block{width:100%}
+
+  /* Login */
+  #login{min-height:100vh;display:grid;grid-template-columns:1.1fr 1fr}
+  .login-side{background:var(--ink);padding:40px 56px;display:flex;flex-direction:column;justify-content:space-between}
+  .login-side h1{color:#fff;font-size:clamp(30px,3.6vw,46px);line-height:1.1;max-width:14ch;font-weight:700}
+  .login-side p{color:#A9BAC8;max-width:38ch;margin:16px 0 0}
+  .login-main{display:flex;align-items:center;justify-content:center;padding:32px}
+  .login-box{width:100%;max-width:360px}
+  .login-box h2{font-size:28px;margin-bottom:6px}
+  .login-box .sub{color:var(--muted);margin:0 0 24px}
+  .form-error{background:var(--danger-bg);color:var(--danger);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:16px}
+
+  /* App */
+  #app{min-height:100vh;display:grid;grid-template-columns:256px 1fr}
+  .sidebar{background:var(--ink);color:#fff;padding:24px 16px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+  .sidebar .brand{padding:0 8px 28px}
+  nav{display:flex;flex-direction:column;gap:4px;flex:1}
+  .nav-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:8px;color:#C5D2DD;text-decoration:none;font-weight:500;border-left:3px solid transparent}
+  .nav-item:hover{background:var(--ink-2);color:#fff}
+  .nav-item[aria-current="page"]{background:var(--ink-2);color:#fff;border-left-color:var(--accent)}
+  .nav-item svg{flex:none}
+  .user{border-top:1px solid var(--ink-3);padding:16px 8px 0;display:flex;flex-direction:column;gap:10px}
+  .user small{color:#A9BAC8;word-break:break-all}
+  .user button{background:transparent;border:1px solid var(--ink-3);color:#fff;border-radius:8px;height:38px}
+  .user button:hover{background:var(--ink-2)}
+
+  .content{min-width:0}
+  .topbar{display:flex;align-items:center;gap:12px;padding:20px 32px;border-bottom:1px solid var(--line);background:var(--card)}
+  .topbar h1{font-size:24px}
+  #menuBtn{display:none;background:transparent;border:1px solid var(--line);border-radius:8px;width:40px;height:40px;align-items:center;justify-content:center}
+  main{padding:28px 32px 48px;max-width:1080px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;margin-bottom:24px}
+  .card h2{font-size:20px;margin-bottom:16px}
+  .grid2{display:grid;grid-template-columns:220px 1fr;gap:16px}
+  .actions{display:flex;gap:12px;flex-wrap:wrap}
+
+  .list-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+  .list-head h2{margin:0}
+  .count{color:var(--muted);font-family:var(--font-body);font-weight:500;font-size:15px;margin-left:6px}
+  .list-head input{max-width:300px}
+  .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+  table{width:100%;border-collapse:collapse;min-width:520px}
+  th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line)}
+  th{background:#F6F8F9;font-size:13px;font-weight:600;color:var(--muted)}
+  tbody tr:last-child td{border-bottom:none}
+  td.cnpj{font-variant-numeric:tabular-nums;white-space:nowrap}
+  td.row-actions{text-align:right;white-space:nowrap}
+  .link-btn{background:none;border:none;padding:6px 8px;font-weight:600;color:var(--ink-3);border-radius:6px}
+  .link-btn:hover{background:#EEF2F4}
+  .link-btn.danger{color:var(--danger)}
+  .link-btn.danger:hover{background:var(--danger-bg)}
+  .empty{color:var(--muted);text-align:center;padding:28px 12px;margin:0}
+  .welcome p{margin:0 0 16px;color:var(--muted)}
+  .welcome .big{color:var(--text);font-size:18px}
+
+  .toast{position:fixed;right:24px;bottom:24px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:8px;font-weight:500;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .2s,transform .2s;max-width:340px;z-index:50}
+  .toast.show{opacity:1;transform:none}
+  .toast.erro{background:var(--danger)}
+  .overlay{display:none}
+
+  @media (max-width:900px){
+    #login{grid-template-columns:1fr}
+    .login-side{padding:24px;gap:24px}
+    .login-side h1{font-size:28px}
+    #app{grid-template-columns:1fr}
+    .sidebar{position:fixed;left:0;top:0;bottom:0;width:272px;z-index:40;transform:translateX(-100%);transition:transform .2s}
+    .sidebar.open{transform:none}
+    .overlay.show{display:block;position:fixed;inset:0;background:rgba(10,20,30,.5);z-index:30}
+    #menuBtn{display:inline-flex}
+    .topbar{padding:14px 16px}
+    .topbar h1{font-size:20px}
+    main{padding:20px 16px 40px}
+    .grid2{grid-template-columns:1fr}
+    .card{padding:18px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .sidebar,.toast{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" hidden>
+  <div class="login-side">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="none" stroke="#E3A30A" stroke-width="3"/><path d="M18 18l7 7" stroke="#E3A30A" stroke-width="3" stroke-linecap="round"/></svg>
+      <div><b>Busque</b> <span>Seguros</span></div>
+    </div>
+    <div>
+      <h1>Cadastre e encontre seus clientes em segundos.</h1>
+      <p>Acesse com o e-mail e a senha fornecidos pelo administrador do sistema.</p>
+    </div>
+  </div>
+  <div class="login-main">
+    <div class="login-box">
+      <h2>Entrar</h2>
+      <p class="sub">Informe seus dados de acesso.</p>
+      <form id="loginForm" novalidate>
+        <div id="loginError" class="form-error" role="alert" hidden></div>
+        <div class="field">
+          <label for="email">E-mail</label>
+          <input id="email" type="email" autocomplete="username" placeholder="voce@empresa.com.br" required>
+        </div>
+        <div class="field">
+          <label for="senha">Senha</label>
+          <input id="senha" type="password" autocomplete="current-password" required>
+        </div>
+        <button class="btn primary block" id="loginBtn" type="submit">Entrar</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" hidden>
+  <div class="overlay" id="overlay"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="none" stroke="#E3A30A" stroke-width="3"/><path d="M18 18l7 7" stroke="#E3A30A" stroke-width="3" stroke-linecap="round"/></svg>
+      <div><b>Busque</b> <span>Seguros</span></div>
+    </div>
+    <nav aria-label="Menu principal">
+      <a class="nav-item" href="#painel" data-route="painel">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2.5" y="2.5" width="6" height="6" rx="1.2"/><rect x="11.5" y="2.5" width="6" height="6" rx="1.2"/><rect x="2.5" y="11.5" width="6" height="6" rx="1.2"/><rect x="11.5" y="11.5" width="6" height="6" rx="1.2"/></svg>
+        Painel
+      </a>
+      <a class="nav-item" href="#clientes" data-route="clientes">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="7" r="3.2"/><path d="M2.5 16.5c.4-3 2.6-4.6 5.5-4.6s5.1 1.6 5.5 4.6"/><path d="M14 4.2a3 3 0 0 1 0 5.6M15.5 12.3c1.7.5 2.8 1.9 3 4.2"/></svg>
+        Cadastro de Cliente
+      </a>
+    </nav>
+    <div class="user">
+      <small id="userEmail"></small>
+      <button type="button" id="logoutBtn">Sair</button>
+    </div>
+  </aside>
+
+  <div class="content">
+    <header class="topbar">
+      <button type="button" id="menuBtn" aria-label="Abrir menu" aria-controls="sidebar">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
+      </button>
+      <h1 id="pageTitle">Painel</h1>
+    </header>
+
+    <main>
+      <!-- Painel -->
+      <section id="page-painel">
+        <div class="card welcome">
+          <h2>Bem-vindo ao Busque Seguros</h2>
+          <p class="big" id="painelResumo">Carregando clientes...</p>
+          <a class="btn primary" href="#clientes" style="display:inline-flex;align-items:center;text-decoration:none">Cadastrar cliente</a>
+        </div>
+      </section>
+
+      <!-- Cadastro de Cliente -->
+      <section id="page-clientes" hidden>
+        <div class="card">
+          <h2 id="formTitle">Novo cliente</h2>
+          <form id="clienteForm" novalidate>
+            <div class="grid2">
+              <div class="field">
+                <label for="cnpj">CNPJ</label>
+                <input id="cnpj" inputmode="numeric" autocomplete="off" placeholder="00.000.000/0000-00" maxlength="18">
+                <p class="err" id="cnpjErr" role="alert"></p>
+              </div>
+              <div class="field">
+                <label for="nome">Nome</label>
+                <input id="nome" autocomplete="off" maxlength="200" placeholder="Razão social ou nome do cliente">
+                <p class="err" id="nomeErr" role="alert"></p>
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn primary" id="saveBtn" type="submit">Salvar cliente</button>
+              <button class="btn ghost" id="cancelBtn" type="button" hidden>Cancelar edição</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="list-head">
+            <h2>Clientes cadastrados <span class="count" id="listCount"></span></h2>
+            <input type="search" id="search" placeholder="Buscar por nome ou CNPJ" aria-label="Buscar cliente">
+          </div>
+          <div class="table-wrap" id="tableWrap">
+            <table>
+              <thead><tr><th>CNPJ</th><th>Nome</th><th style="text-align:right">Ações</th></tr></thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <p class="empty" id="emptyMsg" hidden></p>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ---------- Configuração do Supabase ----------
+  // A chave "publishable" pode ficar no código. A proteção dos dados é feita pelas regras RLS no banco.
+  // Nunca coloque a senha do banco neste arquivo.
+  var SUPABASE_URL = 'https://ulmyhopntygsqfipeovr.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_oFD1U6EwSzomR8RdB-Ws8g_XoAPawTd';
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // ---------- Utilidades ----------
+  function $(id){ return document.getElementById(id); }
+  function onlyDigits(s){ return (s || '').replace(/\D/g, ''); }
+  function norm(s){ return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+
+  function maskCnpj(v){
+    var d = onlyDigits(v).slice(0, 14);
+    if (d.length > 12) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2}).*/, '$1.$2.$3/$4-$5');
+    if (d.length > 8)  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4}).*/, '$1.$2.$3/$4');
+    if (d.length > 5)  return d.replace(/^(\d{2})(\d{3})(\d{0,3}).*/, '$1.$2.$3');
+    if (d.length > 2)  return d.replace(/^(\d{2})(\d{0,3}).*/, '$1.$2');
+    return d;
+  }
+
+  function cnpjValido(valor){
+    var c = onlyDigits(valor);
+    if (c.length !== 14 || /^(\d)\1+$/.test(c)) return false;
+    function dv(base){
+      var pesos = base === 12 ? [5,4,3,2,9,8,7,6,5,4,3,2] : [6,5,4,3,2,9,8,7,6,5,4,3,2];
+      var soma = 0;
+      for (var i = 0; i < base; i++) soma += Number(c[i]) * pesos[i];
+      var r = soma % 11;
+      return r < 2 ? 0 : 11 - r;
+    }
+    return dv(12) === Number(c[12]) && dv(13) === Number(c[13]);
+  }
+
+  var toastTimer;
+  function toast(msg, tipo){
+    var el = $('toast');
+    el.textContent = msg;
+    el.className = 'toast show' + (tipo === 'erro' ? ' erro' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ el.classList.remove('show'); }, 3800);
+  }
+
+  // ---------- Navegação ----------
+  var TITULOS = { painel: 'Painel', clientes: 'Cadastro de Cliente' };
+
+  function route(){
+    var r = (location.hash || '#painel').replace('#', '');
+    if (!TITULOS[r]) r = 'painel';
+    $('page-painel').hidden = r !== 'painel';
+    $('page-clientes').hidden = r !== 'clientes';
+    $('pageTitle').textContent = TITULOS[r];
+    document.querySelectorAll('.nav-item').forEach(function(a){
+      if (a.getAttribute('data-route') === r) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    closeMenu();
+  }
+  window.addEventListener('hashchange', route);
+
+  function openMenu(){ $('sidebar').classList.add('open'); $('overlay').classList.add('show'); }
+  function closeMenu(){ $('sidebar').classList.remove('open'); $('overlay').classList.remove('show'); }
+  $('menuBtn').addEventListener('click', openMenu);
+  $('overlay').addEventListener('click', closeMenu);
+
+  // ---------- Autenticação ----------
+  var currentUserId = null;
+
+  function showLogin(){
+    $('app').hidden = true;
+    $('login').hidden = false;
+    clientes = [];
+    resetForm();
+  }
+
+  function showApp(session){
+    $('login').hidden = true;
+    $('app').hidden = false;
+    $('userEmail').textContent = session.user.email || '';
+    route();
+    loadClientes();
+  }
+
+  sb.auth.onAuthStateChange(function(event, session){
+    var uid = session && session.user ? session.user.id : null;
+    if (event !== 'INITIAL_SESSION' && uid === currentUserId) return;
+    currentUserId = uid;
+    setTimeout(function(){
+      if (session) showApp(session); else showLogin();
+    }, 0);
+  });
+
+  $('loginForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var box = $('loginError');
+    box.hidden = true;
+    var email = $('email').value.trim();
+    var senha = $('senha').value;
+    if (!email || !senha){
+      box.textContent = 'Informe o e-mail e a senha.';
+      box.hidden = false;
+      return;
+    }
+    var btn = $('loginBtn');
+    btn.disabled = true;
+    btn.textContent = 'Entrando...';
+    var res = await sb.auth.signInWithPassword({ email: email, password: senha });
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+    if (res.error){
+      var m = res.error.message || '';
+      if (/invalid login credentials/i.test(m)) box.textContent = 'E-mail ou senha incorretos.';
+      else if (/email not confirmed/i.test(m)) box.textContent = 'Este acesso ainda não foi confirmado. Peça ao administrador para confirmar o usuário.';
+      else box.textContent = 'Não foi possível entrar. ' + m;
+      box.hidden = false;
+      return;
+    }
+    $('senha').value = '';
+  });
+
+  $('logoutBtn').addEventListener('click', function(){ sb.auth.signOut(); });
+
+  // ---------- Clientes ----------
+  var clientes = [];
+  var editingId = null;
+
+  async function loadClientes(){
+    var res = await sb.from('clientes').select('id,cnpj,nome').order('nome', { ascending: true });
+    if (res.error){
+      toast('Não foi possível carregar os clientes. ' + res.error.message, 'erro');
+      $('painelResumo').textContent = 'Não foi possível carregar os clientes.';
+      return;
+    }
+    clientes = res.data || [];
+    renderList();
+    var n = clientes.length;
+    $('painelResumo').textContent = n === 0
+      ? 'Nenhum cliente cadastrado ainda.'
+      : (n === 1 ? 'Você tem 1 cliente cadastrado.' : 'Você tem ' + n + ' clientes cadastrados.');
+  }
+
+  function renderList(){
+    var termo = norm($('search').value.trim());
+    var termoNum = onlyDigits($('search').value);
+    var lista = clientes.filter(function(c){
+      if (!termo) return true;
+      if (norm(c.nome).indexOf(termo) !== -1) return true;
+      return termoNum.length > 0 && c.cnpj.indexOf(termoNum) !== -1;
+    });
+
+    $('listCount').textContent = clientes.length ? '(' + clientes.length + ')' : '';
+
+    var tbody = $('tbody');
+    tbody.textContent = '';
+    var vazio = $('emptyMsg');
+
+    if (lista.length === 0){
+      $('tableWrap').hidden = true;
+      vazio.hidden = false;
+      vazio.textContent = clientes.length === 0
+        ? 'Nenhum cliente cadastrado ainda. Preencha o formulário acima para cadastrar o primeiro.'
+        : 'Nenhum cliente encontrado para essa busca.';
+      return;
+    }
+    $('tableWrap').hidden = false;
+    vazio.hidden = true;
+
+    lista.forEach(function(c){
+      var tr = document.createElement('tr');
+
+      var tdCnpj = document.createElement('td');
+      tdCnpj.className = 'cnpj';
+      tdCnpj.textContent = maskCnpj(c.cnpj);
+
+      var tdNome = document.createElement('td');
+      tdNome.textContent = c.nome;
+
+      var tdAc = document.createElement('td');
+      tdAc.className = 'row-actions';
+
+      var bEd = document.createElement('button');
+      bEd.type = 'button';
+      bEd.className = 'link-btn';
+      bEd.textContent = 'Editar';
+      bEd.addEventListener('click', function(){ startEdit(c); });
+
+      var bDel = document.createElement('button');
+      bDel.type = 'button';
+      bDel.className = 'link-btn danger';
+      bDel.textContent = 'Excluir';
+      bDel.addEventListener('click', function(){ removeCliente(c); });
+
+      tdAc.appendChild(bEd);
+      tdAc.appendChild(bDel);
+      tr.appendChild(tdCnpj);
+      tr.appendChild(tdNome);
+      tr.appendChild(tdAc);
+      tbody.appendChild(tr);
+    });
+  }
+
+  $('search').addEventListener('input', renderList);
+
+  $('cnpj').addEventListener('input', function(){
+    this.value = maskCnpj(this.value);
+    setErr('cnpj', '');
+  });
+  $('nome').addEventListener('input', function(){ setErr('nome', ''); });
+
+  function setErr(campo, msg){
+    $(campo + 'Err').textContent = msg;
+    $(campo).classList.toggle('invalid', !!msg);
+  }
+
+  function resetForm(){
+    editingId = null;
+    $('clienteForm').reset();
+    setErr('cnpj', '');
+    setErr('nome', '');
+    $('formTitle').textContent = 'Novo cliente';
+    $('saveBtn').textContent = 'Salvar cliente';
+    $('cancelBtn').hidden = true;
+  }
+
+  function startEdit(c){
+    editingId = c.id;
+    $('cnpj').value = maskCnpj(c.cnpj);
+    $('nome').value = c.nome;
+    setErr('cnpj', '');
+    setErr('nome', '');
+    $('formTitle').textContent = 'Editar cliente';
+    $('saveBtn').textContent = 'Salvar alterações';
+    $('cancelBtn').hidden = false;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    $('nome').focus();
+  }
+
+  $('cancelBtn').addEventListener('click', resetForm);
+
+  $('clienteForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var cnpj = onlyDigits($('cnpj').value);
+    var nome = $('nome').value.trim().replace(/\s+/g, ' ');
+    var ok = true;
+
+    if (!cnpj){ setErr('cnpj', 'Informe o CNPJ.'); ok = false; }
+    else if (!cnpjValido(cnpj)){ setErr('cnpj', 'CNPJ inválido. Confira os 14 números.'); ok = false; }
+    if (!nome){ setErr('nome', 'Informe o nome do cliente.'); ok = false; }
+    if (!ok) return;
+
+    var btn = $('saveBtn');
+    var textoOriginal = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+
+    var res;
+    if (editingId){
+      res = await sb.from('clientes').update({ cnpj: cnpj, nome: nome }).eq('id', editingId);
+    } else {
+      res = await sb.from('clientes').insert({ cnpj: cnpj, nome: nome });
+    }
+
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+
+    if (res.error){
+      if (res.error.code === '23505') setErr('cnpj', 'Este CNPJ já está cadastrado.');
+      else toast('Não foi possível salvar. ' + res.error.message, 'erro');
+      return;
+    }
+
+    var foiEdicao = !!editingId;
+    resetForm();
+    toast(foiEdicao ? 'Cliente atualizado.' : 'Cliente salvo.');
+    await loadClientes();
+    $('cnpj').focus();
+  });
+
+  async function removeCliente(c){
+    if (!window.confirm('Excluir o cliente "' + c.nome + '"? Esta ação não pode ser desfeita.')) return;
+    var res = await sb.from('clientes').delete().eq('id', c.id);
+    if (res.error){
+      toast('Não foi possível excluir. ' + res.error.message, 'erro');
+      return;
+    }
+    if (editingId === c.id) resetForm();
+    toast('Cliente excluído.');
+    loadClientes();
+  }
+})();
+</script>
+</body>
+</html>
